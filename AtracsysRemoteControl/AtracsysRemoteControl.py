@@ -15,28 +15,24 @@ class AtracsysRemoteControl(ScriptedLoadableModule):
 
   def __init__(self, parent):
     ScriptedLoadableModule.__init__(self, parent)
-    self.parent.title = "AtracsysRemoteControl" # TODO make this more human readable by adding spaces
-    self.parent.categories = ["Examples"]
+    self.parent.title = "AtracsysRemoteControl"
+    self.parent.categories = ["IGT"]
     self.parent.dependencies = []
-    self.parent.contributors = ["John Doe (AnyWare Corp.)"] # replace with "Firstname Lastname (Organization)"
+    self.parent.contributors = ["Mark Asselin (Perk Lab, Queen's University)"]
     self.parent.helpText = """
-This is an example of scripted loadable module bundled in an extension.
-It performs a simple thresholding on the input volume and optionally captures a screenshot.
+This module allows the remote control of an Atracsys tracker.
 """
     self.parent.helpText += self.getDefaultModuleDocumentationLink()
     self.parent.acknowledgementText = """
-This file was originally developed by Jean-Christophe Fillion-Robin, Kitware Inc.
-and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
-""" # replace with organization, grant and thanks.
+This work was funded, in part, by NIH/NIBIB and NIH/NIGMS (via grant 1R01EB021396-01A1 - Slicer+PLUS: 
+Point-of-Care Ultrasound) and by CANARIE's Research Software Program.
+"""
 
 #
 # AtracsysRemoteControlWidget
 #
 
 class AtracsysRemoteControlWidget(ScriptedLoadableModuleWidget):
-  """Uses ScriptedLoadableModuleWidget base class, available at:
-  https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
-  """
 
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
@@ -46,25 +42,78 @@ class AtracsysRemoteControlWidget(ScriptedLoadableModuleWidget):
     self.layout.addWidget(uiWidget)
     self.ui = slicer.util.childWidgetVariables(uiWidget)
 
-    self.ui.inputSelector.setMRMLScene(slicer.mrmlScene)
-    self.ui.outputSelector.setMRMLScene(slicer.mrmlScene)
+    self.ui.qMRMLNodeComboBox.setMRMLScne(slicer.mrmlScene)
+
 
     # connections
+    self.ui.plusNodeComboBox.connect('currentNodeChanged(vtkMRMLNode*)', self.onPlusNodeChanged)
+
+
+
     self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
-    self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
-    self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
+
 
     # Add vertical spacer
     self.layout.addStretch(1)
 
-    # Refresh Apply button state
-    self.onSelect()
+
+
+  def onPlusNodeChanged(self):
+    pass
+
+  
+  def onDeviceSelected(self):
+    pass
+
+
+  def onLedEnableChecked(self):
+    pass
+
+
+  def onLedRedValueChanged(self):
+    pass
+
+
+  def onLedGreenValueChanged(self):
+    pass
+
+
+  def onLedBlueValueChanged(self):
+    pass
+
+
+  def onLedFrequencyValueChanged(self):
+    pass
+
+
+  def onMarkerComboBoxSelectedChanged(self):
+    pass
+
+
+  def onMarkerEnableButtonPressed(self):
+    pass
+
+
+  def onMarkerGeometryFileSelectorModified(self):
+    pass
+
+
+  def onMarkerAddButtonPressed(self):
+    pass
+
+
+  def onLaserEnableChecked(self):
+    pass
+
+
+  def onVideoEnableChecked(self):
+    pass
+
 
   def cleanup(self):
     pass
 
-  def onSelect(self):
-    self.ui.applyButton.enabled = self.ui.inputSelector.currentNode() and self.ui.outputSelector.currentNode()
+
 
   def onApplyButton(self):
     logic = AtracsysRemoteControlLogic()
