@@ -36,34 +36,92 @@ class AtracsysRemoteControlWidget(ScriptedLoadableModuleWidget):
 
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
+    self.connectorNodeObserverTagList = []
+    self.logic = AtracsysRemoteControlLogic()
 
     # Load widget from .ui file (created by Qt Designer)
     uiWidget = slicer.util.loadUI(self.resourcePath('UI/AtracsysRemoteControl.ui'))
     self.layout.addWidget(uiWidget)
     self.ui = slicer.util.childWidgetVariables(uiWidget)
 
-    self.ui.qMRMLNodeComboBox.setMRMLScne(slicer.mrmlScene)
+    self.ui.connectorNodeSelector.setMRMLScene(slicer.mrmlScene)
+    
+    # signal-slot connections
+    self.ui.connectorNodeSelector.connect('currentNodeChanged(vtkMRMLNode*)', self.onConnectorNodeSelected)
+    self.ui.deviceComboBox.connect('currentIndexChanged(int)', self.onDeviceIDChanged)
 
+    self.ui.ledEnableCheckBox.connect('stateChanged(int)', self.onLedEnableChecked)
+    self.ui.redSlider.connect('valueChanged(double)', self.onLedRedValueChanged)
+    self.ui.greenSlider.connect('valueChanged(double)', self.onLedBlueValueChanged)
+    self.ui.blueSlider.connect('valueChanged(double)', self.onLedBlueValueChanged)
+    self.ui.frequencySlider.connect('valueChanged(double)', self.onLedFrequencyValueChanged)
 
-    # connections
-    self.ui.plusNodeComboBox.connect('currentNodeChanged(vtkMRMLNode*)', self.onPlusNodeChanged)
+    self.ui.markerComboBox.connect('currentIndexChanged(int)', self.onMarkerComboBoxSelectedChanged)
+    self.ui.markerEnableButton.connect('clicked(bool)', self.onMarkerEnableButtonPressed)
+    self.ui.markerPathLineEdit.connect('currentPathChanged(QString&)', self.onMarkerGeometryFileSelectorModified)
+    self.ui.markerAddButton.connect('clicked(bool)', self.onMarkerAddButtonPressed)
 
+    self.ui.laserEnableCheckBox.connect('stateChanged(int)', self.onLaserEnableChecked)
+    self.ui.videoEnableCheckBox.connect('stateChanged(int)', self.onVideoEnableChecked)
 
+    self.plusRemoteNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLPlusRemoteNode')
+    if self.plusRemoteNode is None:
+      self.plusRemoteNode = slicer.vtkMRMLPlusRemoteNode()
+      self.plusRemoteNode.SetName("PlusRemoteNode")
+      slicer.mrmlScene.AddNode(self.plusRemoteNode)
+    self.plusRemoteNode.AddObserver(slicer.vtkMRMLPlusRemoteNode.DeviceIdsReceivedEvent, self.requestDeviceIDsCompleted)
+    self.onConnectorNodeSelected(self.ui.connectorNodeSelector.currentNode())
 
-    self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
-
-
-    # Add vertical spacer
-    self.layout.addStretch(1)
-
-
-
-  def onPlusNodeChanged(self):
+    
+  def onReload(self):
     pass
 
-  
-  def onDeviceSelected(self):
-    pass
+
+  def requestDeviceIDsCompleted(self, object=None, event=None, caller=None):
+    wasBlocked = self.ui.deviceComboBox.blockSignals(True)
+    self.ui.deviceComboBox.clear()
+    deviceIDs = vtk.vtkStringArray()
+    self.plusRemoteNode.GetDeviceIDs(deviceIDs)
+    currentDeviceID = self.plusRemoteNode.GetCurrentDeviceID()
+
+    for valueIndex in range(deviceIDs.GetNumberOfValues()):
+      deviceID = deviceIDs.GetValue(valueIndex)
+      self.ui.deviceComboBox.addItem(deviceID)
+
+    currentIndex = self.ui.deviceComboBox.findText(currentDeviceID)
+    self.ui.deviceComboBox.setCurrentIndex(currentIndex)
+    self.ui.deviceComboBox.blockSignals(wasBlocked)
+    self.onDeviceIDChanged()
+
+
+  def onConnectorNodeSelected(self, connectorNode):
+    for obj, tag in self.connectorNodeObserverTagList:
+      obj.RemoveObserver(tag)
+    self.connectorNodeObserverTagList = []
+
+    # Add observers for connect/disconnect events
+    if connectorNode is not None:
+      events = [[slicer.vtkMRMLIGTLConnectorNode.ConnectedEvent, self.onConnectorNodeConnectionChanged], [slicer.vtkMRMLIGTLConnectorNode.DisconnectedEvent, self.onConnectorNodeConnectionChanged]]
+      for tagEventHandler in events:
+        connectorNodeObserverTag = connectorNode.AddObserver(tagEventHandler[0], tagEventHandler[1])
+        self.connectorNodeObserverTagList.append((connectorNode, connectorNodeObserverTag))
+
+    self.plusRemoteNode.SetAndObserveOpenIGTLinkConnectorNode(connectorNode)
+    self.logic.setConnectorNode(connectorNode)
+
+
+    self.onConnectorNodeConnectionChanged()
+
+  def onConnectorNodeConnectionChanged(self, object=None, event=None, caller=None):
+    connectorNode = self.ui.connectorNodeSelector.currentNode()
+    if (connectorNode is not None and connectorNode.GetState() == slicer.vtkMRMLIGTLConnectorNode.StateConnected):
+      self.plusRemoteNode.SetDeviceIDType("")
+      slicer.modules.plusremote.logic().RequestDeviceIDs(self.plusRemoteNode)
+
+  def onDeviceIDChanged(self):
+    currentDeviceID = self.deviceComboBox.currentText
+    self.plusRemoteNode.SetCurrentDeviceID(currentDeviceID)
+    self.logic.setDeviceID(currentDeviceID)
 
 
   def onLedEnableChecked(self):
@@ -71,7 +129,7 @@ class AtracsysRemoteControlWidget(ScriptedLoadableModuleWidget):
 
 
   def onLedRedValueChanged(self):
-    pass
+    print("red")
 
 
   def onLedGreenValueChanged(self):
@@ -126,14 +184,28 @@ class AtracsysRemoteControlWidget(ScriptedLoadableModuleWidget):
 #
 
 class AtracsysRemoteControlLogic(ScriptedLoadableModuleLogic):
-  """This class should implement all the actual
-  computation done by your module.  The interface
-  should be such that other python code can import
-  this class and make use of the functionality without
-  requiring an instance of the Widget.
-  Uses ScriptedLoadableModuleLogic base class, available at:
-  https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
-  """
+
+  def setConnectorNode(self, connectorNode):
+    self.connectorNode = connectorNode
+
+
+  def setDeviceID(self, deviceID):
+    self.deviceID = deviceID
+
+
+  def setParameter(self, parameterName, value):
+    command = slicer.vtkSlicerOpenIGTLinkCommand()
+    command.SetName('AtracsysCommand')
+
+    # set content to command XML
+
+   
+
+
+
+  def getParameter(self, parameterName):
+    pass
+
 
   def hasImageData(self,volumeNode):
     """This is an example logic method that
