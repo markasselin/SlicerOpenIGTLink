@@ -1,6 +1,7 @@
 import os
 import unittest
 import vtk, qt, ctk, slicer
+import xml.etree.ElementTree as xml
 from slicer.ScriptedLoadableModule import *
 import logging
 
@@ -119,16 +120,22 @@ class AtracsysRemoteControlWidget(ScriptedLoadableModuleWidget):
       slicer.modules.plusremote.logic().RequestDeviceIDs(self.plusRemoteNode)
 
   def onDeviceIDChanged(self):
-    currentDeviceID = self.deviceComboBox.currentText
+    currentDeviceID = self.ui.deviceComboBox.currentText
     self.plusRemoteNode.SetCurrentDeviceID(currentDeviceID)
     self.logic.setDeviceID(currentDeviceID)
 
 
   def onLedEnableChecked(self):
-    pass
+    commandName = "LedEnabled"
+    if self.ui.ledEnableCheckBox.isChecked():
+      value = "TRUE"
+    else:
+      value = "FALSE"
+    self.logic.setParameter(commandName, value)
 
 
   def onLedRedValueChanged(self):
+    #commandName = 
     print("red")
 
 
@@ -195,67 +202,26 @@ class AtracsysRemoteControlLogic(ScriptedLoadableModuleLogic):
 
   def setParameter(self, parameterName, value):
     command = slicer.vtkSlicerOpenIGTLinkCommand()
-    command.SetName('AtracsysCommand')
 
-    # set content to command XML
+    content = xml.Element('Command')
+    content.attrib = {
+        'Name':'AtracsysCommand',
+        'DeviceID':'TrackerDevice'
+      }
+    body = xml.SubElement(content, 'SetParameter')
+    body.attrib = {
+      'Name':'LedEnabled',
+      'Value':'FALSE'
+      }
 
-   
-
+    command.SetCommandContent(xml.tostring(content))
+    command.SendCommand(self.connectorNode)
 
 
   def getParameter(self, parameterName):
     pass
 
 
-  def hasImageData(self,volumeNode):
-    """This is an example logic method that
-    returns true if the passed in volume
-    node has valid image data
-    """
-    if not volumeNode:
-      logging.debug('hasImageData failed: no volume node')
-      return False
-    if volumeNode.GetImageData() is None:
-      logging.debug('hasImageData failed: no image data in volume node')
-      return False
-    return True
-
-  def isValidInputOutputData(self, inputVolumeNode, outputVolumeNode):
-    """Validates if the output is not the same as input
-    """
-    if not inputVolumeNode:
-      logging.debug('isValidInputOutputData failed: no input volume node defined')
-      return False
-    if not outputVolumeNode:
-      logging.debug('isValidInputOutputData failed: no output volume node defined')
-      return False
-    if inputVolumeNode.GetID()==outputVolumeNode.GetID():
-      logging.debug('isValidInputOutputData failed: input and output volume is the same. Create a new volume for output to avoid this error.')
-      return False
-    return True
-
-  def run(self, inputVolume, outputVolume, imageThreshold, enableScreenshots=0):
-    """
-    Run the actual algorithm
-    """
-
-    if not self.isValidInputOutputData(inputVolume, outputVolume):
-      slicer.util.errorDisplay('Input volume is the same as output volume. Choose a different output volume.')
-      return False
-
-    logging.info('Processing started')
-
-    # Compute the thresholded output volume using the Threshold Scalar Volume CLI module
-    cliParams = {'InputVolume': inputVolume.GetID(), 'OutputVolume': outputVolume.GetID(), 'ThresholdValue' : imageThreshold, 'ThresholdType' : 'Above'}
-    cliNode = slicer.cli.run(slicer.modules.thresholdscalarvolume, None, cliParams, wait_for_completion=True)
-
-    # Capture screenshot
-    if enableScreenshots:
-      self.takeScreenshot('AtracsysRemoteControlTest-Start','MyScreenshot',-1)
-
-    logging.info('Processing completed')
-
-    return True
 
 
 class AtracsysRemoteControlTest(ScriptedLoadableModuleTest):
